@@ -4,99 +4,69 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Can-Badge iPhone BLE Probe R13</title>
+<title>Can-Badge iPhone BLE Notify Probe R15</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#101216;color:#f2f4f8}
-body{margin:0;padding:20px;max-width:760px;margin-inline:auto}h1{font-size:24px;margin:0 0 8px}.sub{color:#aeb7c5;margin-bottom:18px}.card{background:#1a1e25;border:1px solid #343b47;border-radius:14px;padding:16px;margin:12px 0}.warn{border-color:#866a2b;background:#211d13}.small{font-size:13px;color:#b9c2d0}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#303744;font-size:12px;margin:2px}button{width:100%;padding:14px 12px;margin:6px 0;border:0;border-radius:12px;font-size:16px;font-weight:700;background:#e9eef7;color:#101216}button.secondary{background:#303744;color:#fff}button:disabled{opacity:.45}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b0d11;padding:12px;border-radius:10px;max-height:52vh;overflow:auto}.step{margin-top:8px;padding:8px 10px;background:#12161c;border-radius:8px}
+body{margin:0;padding:20px;max-width:760px;margin-inline:auto}h1{font-size:24px;margin:0 0 8px}.sub{color:#aeb7c5;margin-bottom:18px}.card{background:#1a1e25;border:1px solid #343b47;border-radius:14px;padding:16px;margin:12px 0}.warn{border-color:#866a2b;background:#211d13}.ok{border-color:#316d50;background:#132019}.small{font-size:13px;color:#b9c2d0}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#303744;font-size:12px;margin:2px}button{width:100%;padding:14px 12px;margin:6px 0;border:0;border-radius:12px;font-size:16px;font-weight:700;background:#e9eef7;color:#101216}button.secondary{background:#303744;color:#fff}button:disabled{opacity:.45}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b0d11;padding:12px;border-radius:10px;max-height:48vh;overflow:auto}.step{margin-top:8px;padding:8px 10px;background:#12161c;border-radius:8px}
 </style>
 </head>
 <body>
-<h1>Can-Badge iPhone BLE Probe R13</h1>
-<div class="sub">R12でE-Badge接続は成功したがService取得が全て error "2"。R13はService discoveryを再試行・列挙し、詳細エラーを採取します。</div>
-<div class="card warn"><b>安全状態</b><div class="small">Persistent Write Gate: CLOSED</div><div class="small">Characteristic write / readValue / notification / OTA / Firmware操作は実装していません。</div></div>
+<h1>Can-Badge iPhone BLE Notify Probe R15</h1>
+<div class="sub">R13実機EvidenceでBB00 / BB01 / BB02を確認。R15はBB02のNotifyだけを観測し、BB01へは一切送信しません。</div>
+<div class="card warn"><b>安全境界</b><div class="small">Persistent Write Gate: CLOSED</div><div class="small">Characteristic value write / readValue / OTA / DFU / Firmware / Flash操作は実装していません。</div><div class="small">startNotifications()/stopNotifications()はBLEリンク上の通知購読設定を変更しますが、BB01へのデータ送信や永続Flash書込みは行いません。</div></div>
+<div class="card"><b>Live確認済みGATT</b><span class="tag">Service BB00</span><span class="tag">BB01 Write Without Response</span><span class="tag">BB02 Notify</span></div>
 <div class="card"><b>1. 環境確認</b><div id="env" class="small">未確認</div><button id="checkBtn" class="secondary">環境確認</button></div>
-<div class="card"><b>2. READ-ONLY GATT確認</b><div id="progress" class="step small">待機中</div><button id="connectNameBtn">E-Badge指定で接続</button><button id="connectAnyBtn" class="secondary">全候補からE-Badgeを選択</button><button id="disconnectBtn" class="secondary" disabled>切断</button><div id="deviceInfo" class="small">未接続</div></div>
-<div class="card"><b>Factory Firmwareから予測したService</b><span class="tag">AE00</span><span class="tag">AE30</span><span class="tag">AE3A</span><div class="small">存在しないと断定せず、BluefyのService discovery挙動も同時に診断します。</div></div>
-<div class="card"><b>3. 結果</b><div id="summary" class="small">未実行</div><pre id="log">待機中</pre><div class="row"><button id="copyBtn" class="secondary" disabled>JSONをコピー</button><button id="shareBtn" class="secondary" disabled>JSONを共有</button></div></div>
+<div class="card"><b>2. E-Badge接続とBB02確認</b><div id="progress" class="step small">待機中</div><button id="connectBtn">E-Badgeへ接続</button><button id="disconnectBtn" class="secondary" disabled>切断</button><div id="deviceInfo" class="small">未接続</div></div>
+<div class="card"><b>3. Notification観測</b><div class="small">接続後、BB02がnotify=trueであることを再確認した場合だけ開始できます。ページからBB01へはアクセスしません。</div><button id="startBtn" disabled>BB02通知監視を開始</button><button id="stopBtn" class="secondary" disabled>通知監視を停止</button></div>
+<div class="card"><b>4. Evidence JSON</b><pre id="log">待機中</pre><div class="row"><button id="copyBtn" class="secondary" disabled>JSONをコピー</button><button id="shareBtn" class="secondary" disabled>JSONを共有</button></div></div>
 <script>
 'use strict';
 const BASE='-0000-1000-8000-00805f9b34fb';
 const uuid16=h=>`0000${h.toLowerCase()}${BASE}`;
-const EXPECTED=[
- {service:'ae00',characteristics:['ae01','ae02']},
- {service:'ae30',characteristics:['ae01','ae02','ae03','ae04','ae05','ae10']},
- {service:'ae3a',characteristics:['ae3b','ae3c']}
-];
-const OPTIONAL=EXPECTED.map(x=>uuid16(x.service));
-let device=null,server=null,result=null;
+const SERVICE_BB00=uuid16('bb00');
+const CHARACTERISTIC_BB02=uuid16('bb02');
+let device=null,server=null,service=null,notifyCharacteristic=null,result=null;
 const $=id=>document.getElementById(id);
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-function errSnapshot(e){
- const out={string:String(e)};
- for(const k of ['name','message','code']){try{if(e&&e[k]!==undefined)out[k]=e[k];}catch(_){}}
- try{for(const k of Object.getOwnPropertyNames(e||{})){if(!(k in out)){const v=e[k];if(['string','number','boolean'].includes(typeof v)||v==null)out[k]=v;}}}catch(_){}
- return out;
-}
+function errSnapshot(e){const out={string:String(e)};for(const k of ['name','message','code']){try{if(e&&e[k]!==undefined)out[k]=e[k];}catch(_){}}return out;}
 function props(c){const p=c.properties||{};return{broadcast:!!p.broadcast,read:!!p.read,writeWithoutResponse:!!p.writeWithoutResponse,write:!!p.write,notify:!!p.notify,indicate:!!p.indicate,authenticatedSignedWrites:!!p.authenticatedSignedWrites,reliableWrite:!!p.reliableWrite,writableAuxiliaries:!!p.writableAuxiliaries};}
 function envSnapshot(){const o={timestamp:new Date().toISOString(),userAgent:navigator.userAgent,secureContext:window.isSecureContext,navigatorBluetooth:!!navigator.bluetooth,locationProtocol:location.protocol};$('env').textContent=`SecureContext=${o.secureContext} / WebBluetooth=${o.navigatorBluetooth} / ${o.locationProtocol}`;return o;}
+function render(){ $('log').textContent=result?JSON.stringify(result,null,2):'待機中';$('copyBtn').disabled=!result;$('shareBtn').disabled=!result; }
 function progress(t){$('progress').textContent=t;}
-function render(){
- $('log').textContent=result?JSON.stringify(result,null,2):'待機中';$('copyBtn').disabled=!result;$('shareBtn').disabled=!result;
- if(result&&result.summary){const s=result.summary;$('summary').textContent=`Connected=${s.connected} / Enumerate=${s.primaryEnumeration} / AE00=${s.ae00} / AE30=${s.ae30} / AE3A=${s.ae3a}`;}
-}
-async function snapshotService(service,source){
- const sr={uuid:service.uuid,source,characteristics:[]};
- try{const cs=await service.getCharacteristics();for(const c of cs)sr.characteristics.push({uuid:c.uuid,properties:props(c)});}catch(e){sr.characteristicsEnumerationError=errSnapshot(e);}
- return sr;
-}
-async function resolveExpected(entry){
- const attempts=[];
- const forms=[{label:'uuid128',value:uuid16(entry.service)},{label:'numeric16',value:parseInt(entry.service,16)}];
- for(let round=1;round<=3;round++){
-   for(const f of forms){
-     try{
-       const s=await server.getPrimaryService(f.value);
-       const sr=await snapshotService(s,`direct-${f.label}-round${round}`);
-       sr.uuid16=entry.service;sr.present=true;sr.attempts=attempts;
-       return sr;
-     }catch(e){attempts.push({round,form:f.label,error:errSnapshot(e)});}
-   }
-   await sleep(900);
- }
- return{uuid16:entry.service,uuid:uuid16(entry.service),present:false,attempts};
-}
-async function connect(mode){
- result={schema:'canbadge-iphone-ble-probe-r13',startedAt:new Date().toISOString(),environment:envSnapshot(),safety:{characteristicWriteImplemented:false,readValueCalled:false,notificationsStarted:false,firmwareOperation:false,persistentWriteGate:'CLOSED'},requestMode:mode,expectedServices:EXPECTED,primaryServicesEnumeration:null,services:[],errors:[]};render();
+async function getPrimaryServiceBB00(){try{return await server.getPrimaryService(SERVICE_BB00);}catch(first){try{return await server.getPrimaryService(0xBB00);}catch(second){throw{stage:'getPrimaryService',first:errSnapshot(first),second:errSnapshot(second)};}}}
+async function getCharacteristicBB02(){try{return await service.getCharacteristic(CHARACTERISTIC_BB02);}catch(first){try{return await service.getCharacteristic(0xBB02);}catch(second){throw{stage:'getCharacteristic',first:errSnapshot(first),second:errSnapshot(second)};}}}
+function valueChanged(event){const view=event.target.value;const bytes=[];for(let i=0;i<view.byteLength;i++)bytes.push(view.getUint8(i));result.notifications.push({timestamp:new Date().toISOString(),length:bytes.length,hex:bytes.map(v=>v.toString(16).padStart(2,'0')).join(' '),bytes});render();}
+async function connect(){
+ result={schema:'canbadge-iphone-ble-notify-probe-r15',startedAt:new Date().toISOString(),environment:envSnapshot(),safety:{characteristicValueWriteImplemented:false,bb01AccessImplemented:false,readValueCalled:false,notificationSubscriptionImplemented:true,firmwareOperation:false,persistentWriteGate:'CLOSED'},target:{service:'BB00',characteristic:'BB02'},notifications:[],errors:[]};render();
  try{
-   if(!navigator.bluetooth)throw new Error('Web Bluetooth APIがありません。Bluefy等の対応runtimeで開いてください。');
-   if(!window.isSecureContext)throw new Error('Secure Contextではありません。HTTPSで開いてください。');
-   progress('Bluetoothデバイス選択待ち');
-   const opts=mode==='name-filter'?{filters:[{name:'E-Badge'}],optionalServices:OPTIONAL}:{acceptAllDevices:true,optionalServices:OPTIONAL};
-   device=await navigator.bluetooth.requestDevice(opts);
-   result.device={name:device.name||null,id:device.id||null};$('deviceInfo').textContent=`選択: ${device.name||'(nameなし)'}`;
-   device.addEventListener('gattserverdisconnected',()=>{progress('BLE切断');$('disconnectBtn').disabled=true;});
-   progress('GATT接続中');server=await device.gatt.connect();$('disconnectBtn').disabled=false;$('deviceInfo').textContent=`接続中: ${device.name||'(nameなし)'}`;
-   result.connected=true;
-   progress('接続安定待ち 1.5秒');await sleep(1500);
-   progress('Primary Service列挙中');
-   try{
-     const all=await server.getPrimaryServices();
-     result.primaryServicesEnumeration={success:true,count:all.length,services:[]};
-     for(const s of all)result.primaryServicesEnumeration.services.push(await snapshotService(s,'getPrimaryServices'));
-   }catch(e){result.primaryServicesEnumeration={success:false,error:errSnapshot(e)};}
-   for(const entry of EXPECTED){progress(`${entry.service.toUpperCase()} を複数方式で確認中`);result.services.push(await resolveExpected(entry));render();}
-   const has=x=>result.services.some(s=>s.uuid16===x&&s.present);
-   result.completedAt=new Date().toISOString();
-   result.summary={connected:true,primaryEnumeration:!!(result.primaryServicesEnumeration&&result.primaryServicesEnumeration.success),ae00:has('ae00'),ae30:has('ae30'),ae3a:has('ae3a')};
-   progress('READ-ONLY診断完了。JSONを共有してください。');render();
- }catch(e){result.errors.push(errSnapshot(e));result.completedAt=new Date().toISOString();result.summary={connected:!!server,primaryEnumeration:false,ae00:false,ae30:false,ae3a:false};progress('エラー。JSONを共有してください。');render();}
+  if(!navigator.bluetooth)throw new Error('Web Bluetooth APIがありません。Bluefy等の対応runtimeで開いてください。');
+  if(!window.isSecureContext)throw new Error('Secure Contextではありません。HTTPSで開いてください。');
+  progress('Bluetoothデバイス選択待ち');
+  device=await navigator.bluetooth.requestDevice({filters:[{name:'E-Badge'}],optionalServices:[SERVICE_BB00]});
+  result.device={name:device.name||null,id:device.id||null};
+  device.addEventListener('gattserverdisconnected',()=>{progress('BLE切断');$('disconnectBtn').disabled=true;$('startBtn').disabled=true;$('stopBtn').disabled=true;});
+  progress('GATT接続中');server=await device.gatt.connect();result.connected=true;$('disconnectBtn').disabled=false;$('deviceInfo').textContent=`接続中: ${device.name||'(nameなし)'}`;
+  progress('BB00 Service確認中');service=await getPrimaryServiceBB00();result.service={uuid:service.uuid};
+  progress('BB02 Characteristic確認中');notifyCharacteristic=await getCharacteristicBB02();result.characteristic={uuid:notifyCharacteristic.uuid,properties:props(notifyCharacteristic)};
+  if(!notifyCharacteristic.properties||!notifyCharacteristic.properties.notify)throw new Error('BB02のnotify propertyがfalseです。通知購読を開始しません。');
+  notifyCharacteristic.addEventListener('characteristicvaluechanged',valueChanged);
+  result.metadataConfirmedAt=new Date().toISOString();progress('BB02 notify=true確認済み。通知監視を開始できます。');$('startBtn').disabled=false;render();
+ }catch(e){result.errors.push(e&&e.stage?e:errSnapshot(e));result.failedAt=new Date().toISOString();progress('エラー。JSONを共有してください。');render();}
 }
-$('checkBtn').onclick=()=>{result={schema:'canbadge-iphone-ble-probe-r13',environment:envSnapshot(),safety:{characteristicWriteImplemented:false,readValueCalled:false,notificationsStarted:false,firmwareOperation:false,persistentWriteGate:'CLOSED'}};render();};
-$('connectNameBtn').onclick=()=>connect('name-filter');
-$('connectAnyBtn').onclick=()=>connect('accept-all');
-$('disconnectBtn').onclick=()=>{try{if(device&&device.gatt&&device.gatt.connected)device.gatt.disconnect();}catch(_){}$('disconnectBtn').disabled=true;};
+async function startNotify(){
+ try{if(!notifyCharacteristic)throw new Error('BB02未取得です。');$('startBtn').disabled=true;progress('BB02 Notification購読開始中');await notifyCharacteristic.startNotifications();result.notificationState='started';result.notificationStartedAt=new Date().toISOString();$('stopBtn').disabled=false;progress('BB02通知監視中。Badgeは通常操作のみ行い、ページから送信はしません。');render();}
+ catch(e){result.errors.push({stage:'startNotifications',error:errSnapshot(e)});$('startBtn').disabled=false;progress('Notification開始エラー。JSONを共有してください。');render();}
+}
+async function stopNotify(){
+ try{if(notifyCharacteristic){await notifyCharacteristic.stopNotifications();}result.notificationState='stopped';result.notificationStoppedAt=new Date().toISOString();$('stopBtn').disabled=true;$('startBtn').disabled=!notifyCharacteristic;progress('BB02通知監視停止');render();}
+ catch(e){result.errors.push({stage:'stopNotifications',error:errSnapshot(e)});progress('Notification停止エラー。必要ならBLE切断してください。');render();}
+}
+$('checkBtn').onclick=()=>{result={schema:'canbadge-iphone-ble-notify-probe-r15',environment:envSnapshot(),safety:{characteristicValueWriteImplemented:false,bb01AccessImplemented:false,readValueCalled:false,notificationSubscriptionImplemented:true,firmwareOperation:false,persistentWriteGate:'CLOSED'}};render();};
+$('connectBtn').onclick=connect;
+$('startBtn').onclick=startNotify;
+$('stopBtn').onclick=stopNotify;
+$('disconnectBtn').onclick=()=>{try{if(device&&device.gatt&&device.gatt.connected)device.gatt.disconnect();}catch(_){}$('disconnectBtn').disabled=true;$('startBtn').disabled=true;$('stopBtn').disabled=true;};
 $('copyBtn').onclick=async()=>{const t=JSON.stringify(result,null,2);try{await navigator.clipboard.writeText(t);alert('JSONをコピーしました。');}catch(e){prompt('コピーしてください',t);}};
-$('shareBtn').onclick=async()=>{const t=JSON.stringify(result,null,2);try{if(navigator.share)await navigator.share({title:'Can-Badge BLE Probe R13',text:t});else await navigator.clipboard.writeText(t);}catch(_){}};
+$('shareBtn').onclick=async()=>{const t=JSON.stringify(result,null,2);try{if(navigator.share)await navigator.share({title:'Can-Badge BLE Notify Probe R15',text:t});else await navigator.clipboard.writeText(t);}catch(_){}};
 envSnapshot();
 </script>
 </body>
