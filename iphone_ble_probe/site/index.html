@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Can-Badge iPhone BLE Probe R12</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#101216;color:#f2f4f8}
+body{margin:0;padding:20px;max-width:760px;margin-inline:auto}h1{font-size:24px;margin:0 0 8px}.sub{color:#aeb7c5;margin-bottom:18px}.card{background:#1a1e25;border:1px solid #343b47;border-radius:14px;padding:16px;margin:12px 0}.warn{border-color:#866a2b;background:#211d13}.ok{border-color:#315f43}.bad{border-color:#713c3c}.status{font-weight:700}.small{font-size:13px;color:#b9c2d0}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#303744;font-size:12px;margin:2px}button{width:100%;padding:14px 12px;margin:6px 0;border:0;border-radius:12px;font-size:16px;font-weight:700;background:#e9eef7;color:#101216}button.secondary{background:#303744;color:#fff}button:disabled{opacity:.45}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#0b0d11;padding:12px;border-radius:10px;max-height:48vh;overflow:auto}.step{margin-top:8px;padding:8px 10px;background:#12161c;border-radius:8px}.pass{color:#9ed8b0}.fail{color:#ffb3b3}
+</style>
+</head>
+<body>
+<h1>Can-Badge iPhone BLE Probe R12</h1>
+<div class="sub">実機GATT構造の確認専用。BadgeへのCharacteristic write / readValue / notification購読 / OTA / Firmware操作は実装していません。</div>
+
+<div class="card warn">
+  <div class="status">安全状態</div>
+  <div class="small">Persistent Write Gate: CLOSED</div>
+  <div class="small">このページはService/Characteristicの列挙だけを行います。</div>
+</div>
+
+<div class="card">
+  <div class="status">1. 環境確認</div>
+  <div id="env" class="small">未確認</div>
+  <button id="checkBtn" class="secondary">環境確認</button>
+</div>
+
+<div class="card">
+  <div class="status">2. READ-ONLY GATT確認</div>
+  <div id="progress" class="step small">待機中</div>
+  <button id="connectBtn">Can-Badgeを選択して接続</button>
+  <button id="disconnectBtn" class="secondary" disabled>切断</button>
+  <div id="deviceInfo" class="small">未接続</div>
+</div>
+
+<div class="card">
+  <div class="status">Factory Firmwareから予測したService</div>
+  <span class="tag">AE00</span><span class="tag">AE30</span><span class="tag">AE3A</span>
+  <div class="small">Live GATTで一致を確認することが今回の目的です。</div>
+</div>
+
+<div class="card">
+  <div class="status">3. 結果</div>
+  <div id="summary" class="small">未実行</div>
+  <pre id="log">待機中</pre>
+  <div class="row">
+    <button id="copyBtn" class="secondary" disabled>JSONをコピー</button>
+    <button id="shareBtn" class="secondary" disabled>JSONを共有</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const BASE='-0000-1000-8000-00805f9b34fb';
+const uuid16=h=>`0000${h.toLowerCase()}${BASE}`;
+const EXPECTED=[
+  {service:'ae00',characteristics:['ae01','ae02']},
+  {service:'ae30',characteristics:['ae01','ae02','ae03','ae04','ae05','ae10']},
+  {service:'ae3a',characteristics:['ae3b','ae3c']}
+];
+let device=null,server=null,result=null;
+const $=id=>document.getElementById(id);
+function propSnapshot(c){const p=c.properties;return{broadcast:!!p.broadcast,read:!!p.read,writeWithoutResponse:!!p.writeWithoutResponse,write:!!p.write,notify:!!p.notify,indicate:!!p.indicate,authenticatedSignedWrites:!!p.authenticatedSignedWrites,reliableWrite:!!p.reliableWrite,writableAuxiliaries:!!p.writableAuxiliaries};}
+function envSnapshot(){const out={timestamp:new Date().toISOString(),userAgent:navigator.userAgent,secureContext:window.isSecureContext,navigatorBluetooth:!!navigator.bluetooth,locationProtocol:location.protocol};$('env').textContent=`SecureContext=${out.secureContext} / WebBluetooth=${out.navigatorBluetooth} / ${out.locationProtocol}`;return out;}
+function progress(t){$('progress').textContent=t;}
+function render(){ $('log').textContent=result?JSON.stringify(result,null,2):'待機中'; $('copyBtn').disabled=!result; $('shareBtn').disabled=!result; if(result&&result.summary){const s=result.summary;$('summary').innerHTML=`AE00=${s.ae00?'PASS':'FAIL'} / AE30=${s.ae30?'PASS':'FAIL'} / AE3A=${s.ae3a?'PASS':'FAIL'} / Layout=${s.expectedLayoutMatch?'PASS':'CHECK'}`;} }
+function evaluateLayout(services){let match=true;for(const e of EXPECTED){const s=services.find(x=>x.uuid16===e.service);if(!s||!s.present){match=false;continue;}for(const c of e.characteristics){const cr=s.characteristics.find(x=>x.uuid16===c);if(!cr||!cr.present)match=false;}}return match;}
+$('checkBtn').addEventListener('click',()=>{result={schema:'canbadge-iphone-ble-probe-r12',environment:envSnapshot(),safety:{characteristicWriteImplemented:false,readValueCalled:false,notificationsStarted:false,firmwareOperation:false,persistentWriteGate:'CLOSED'}};progress('環境確認完了');render();});
+$('connectBtn').addEventListener('click',async()=>{
+  result={schema:'canbadge-iphone-ble-probe-r12',startedAt:new Date().toISOString(),environment:envSnapshot(),safety:{characteristicWriteImplemented:false,readValueCalled:false,notificationsStarted:false,firmwareOperation:false,persistentWriteGate:'CLOSED'},expectedServices:EXPECTED,services:[],errors:[]};render();
+  try{
+    if(!navigator.bluetooth)throw new Error('Web Bluetooth APIがありません。Web Bluetooth対応iOSブラウザ/runtimeで開いてください。');
+    if(!window.isSecureContext)throw new Error('Secure Contextではありません。対応runtimeが許可するHTTPS originで開いてください。');
+    progress('Bluetoothデバイス選択待ち');
+    const optionalServices=EXPECTED.map(x=>uuid16(x.service));
+    device=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices});
+    result.device={name:device.name||null,id:device.id||null};
+    $('deviceInfo').textContent=`選択: ${device.name||'(nameなし)'}`;
+    device.addEventListener('gattserverdisconnected',()=>{progress('BLE切断');$('deviceInfo').textContent='切断されました';$('disconnectBtn').disabled=true;});
+    progress('GATT接続中'); server=await device.gatt.connect(); $('disconnectBtn').disabled=false; $('deviceInfo').textContent=`接続中: ${device.name||'(nameなし)'}`;
+    for(const entry of EXPECTED){
+      progress(`Service ${entry.service.toUpperCase()} を確認中`);
+      const sr={uuid16:entry.service,uuid:uuid16(entry.service),present:false,characteristics:[]};
+      try{
+        const service=await server.getPrimaryService(uuid16(entry.service)); sr.present=true;
+        for(const ch of entry.characteristics){
+          const cr={uuid16:ch,uuid:uuid16(ch),present:false};
+          try{const c=await service.getCharacteristic(uuid16(ch));cr.present=true;cr.properties=propSnapshot(c);}catch(e){cr.error=String(e&&e.message?e.message:e);} sr.characteristics.push(cr);
+        }
+      }catch(e){sr.error=String(e&&e.message?e.message:e);} result.services.push(sr);render();
+    }
+    result.completedAt=new Date().toISOString();
+    result.summary={ae00:!!result.services.find(s=>s.uuid16==='ae00'&&s.present),ae30:!!result.services.find(s=>s.uuid16==='ae30'&&s.present),ae3a:!!result.services.find(s=>s.uuid16==='ae3a'&&s.present),expectedLayoutMatch:evaluateLayout(result.services)};
+    progress('GATT確認完了。JSONを共有してください。');render();
+  }catch(e){result.errors.push(String(e&&e.message?e.message:e));result.completedAt=new Date().toISOString();progress('エラー。JSONを共有してください。');render();}
+});
+$('disconnectBtn').addEventListener('click',()=>{try{if(device&&device.gatt&&device.gatt.connected)device.gatt.disconnect();}catch(_){}$('disconnectBtn').disabled=true;});
+$('copyBtn').addEventListener('click',async()=>{const text=JSON.stringify(result,null,2);try{await navigator.clipboard.writeText(text);alert('JSONをコピーしました。');}catch(e){prompt('コピーしてください',text);}});
+$('shareBtn').addEventListener('click',async()=>{const text=JSON.stringify(result,null,2);try{if(navigator.share){await navigator.share({title:'Can-Badge BLE Probe R12',text});}else{await navigator.clipboard.writeText(text);alert('共有APIがないためクリップボードへコピーしました。');}}catch(_){}});
+envSnapshot();
+</script>
+</body>
+</html>
